@@ -1,12 +1,16 @@
 package ru.springcourse.FirstRestApp.controllers;
 
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.BindingResult;
+import org.springframework.validation.FieldError;
 import org.springframework.web.bind.annotation.*;
 import ru.springcourse.FirstRestApp.models.Person;
 import ru.springcourse.FirstRestApp.services.PeopleService;
 import ru.springcourse.FirstRestApp.util.PersonErrorResponse;
+import ru.springcourse.FirstRestApp.util.PersonNotCreatedException;
 import ru.springcourse.FirstRestApp.util.PersonNotFoundException;
 
 import java.util.List;
@@ -32,6 +36,28 @@ public class PeopleController {
         return peopleService.findOne(id); // Jackson конвертирует в JSON
     }
 
+    @PostMapping()
+    public ResponseEntity<HttpStatus> create(@RequestBody @Valid Person person,
+                                             BindingResult bindingResult) {
+        if (bindingResult.hasErrors()) {
+            StringBuilder errorMessage = new StringBuilder();
+
+            List<FieldError> errors = bindingResult.getFieldErrors();
+            for (FieldError error : errors) {
+                errorMessage.append(error.getField())
+                            .append(" - ").append(error.getDefaultMessage())
+                            .append(";");
+            }
+
+            throw new PersonNotCreatedException(errorMessage.toString());
+        }
+
+        peopleService.save(person);
+
+        // отправляем HTTP ответ с пустым тело и со статусом 200
+        return ResponseEntity.ok(HttpStatus.OK);
+    }
+
     @ExceptionHandler
     private ResponseEntity<PersonErrorResponse> handleException(PersonNotFoundException e) {
         PersonErrorResponse response = new PersonErrorResponse(
@@ -40,5 +66,14 @@ public class PeopleController {
         );
         // В HTTP ответе тело ответа (response) и статус в заголовке
         return new ResponseEntity<>(response, HttpStatus.NOT_FOUND); // NOT_FOUND - 404 статус
+    }
+
+    @ExceptionHandler
+    private ResponseEntity<PersonErrorResponse> handleException(PersonNotCreatedException e) {
+        PersonErrorResponse response = new PersonErrorResponse(
+                e.getMessage(),
+                System.currentTimeMillis()
+        );
+        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
     }
 }
